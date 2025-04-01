@@ -144,7 +144,7 @@ def register():
             return apology("registration failed", 500)  # Server error if ID is not found
 
         # Remember which user has logged in (Store user ID in session)
-        user_id = row[0][id]
+        user_id = row[0]["id"]
         session["user_id"] = user_id
 
         # Redirect user to home page
