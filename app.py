@@ -6,6 +6,7 @@ from flask_session import Session
 from werkzeug.security import check_password_hash, generate_password_hash
 
 from helpers import apology, login_required, lookup, usd
+import datetime
 
 # Configure application
 app = Flask(__name__)
@@ -42,7 +43,74 @@ def index():
 @login_required
 def buy():
     """Buy shares of stock"""
-    return apology("TODO")
+    if request.method == "POST":
+        symbol = request.form.get("symbol")
+        shares = request.form.get("shares")
+
+        # Apology if the input is blank or the symbol does not exist.
+        if not symbol or not shares:
+            return apology(f"Missing {'symbol' if not symbol else 'shares'}")
+        
+        #Lookup symbol data
+        stock_data = lookup(symbol) #lookup function deals with uppercase symbols
+        if not stock_data:
+            return apology("Symbol not found", 400)
+        
+        # Ensure shares is a positive integer
+        try:
+            shares = int(shares)
+            if shares <=0:
+                return apology("Shares must be positive", 400)
+        except ValueError:
+            return apology("Invalid number of shares", 400)
+        
+        """CREATE TABLE "transactions" (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                user_id INTEGER,
+                symbol TEXT,
+                shares INTEGER,
+                price REAL,
+                date timestamp,
+                FOREIGN KEY (user_id) REFERENCES users(id)
+            )
+        """
+        
+        name = stock_data["name"]
+        price = stock_data["price"]
+        user_id = session["user_id"]
+        total_cost = shares * price
+        
+        user_cash_rows = db.execute(
+            "SELECT cash FROM users WHERE id=?", user_id)
+        #to check what user_cash_rows get:
+        # return jsonify(user_cash_rows)
+        # output list of dictionaries containing a single dictionary:
+        # [{"cash":10000}]
+        """if not user_cash_rows:
+            return apology("User not found", 500)  # Internal server error if user not found"""
+        user_cash = user_cash_rows[0]["cash"]
+
+        #Render an apology, without completing a purchase, if the user cannot afford the number of shares at the current price.
+        if total_cost > user_cash:
+            return apology("Insufficient funds", 400)
+        
+        # Update user's cash
+        new_cash = user_cash - total_cost
+        # UPDATE table_name SET column_name = new_value WHERE condition
+        db.execute("UPDATE users SET cash = ? WHERE id=?", new_cash, user_id)
+        
+        #Insert transaction in transactions table
+
+        date_now = datetime.datetime.now()
+        try:
+            db.execute("INSERT INTO transactions (user_id, symbol, shares, price, date) VALUES (?, ?, ?, ?, ?)",user_id, symbol, shares, price, date_now)
+        except:
+            return apology("Database insertion Error!")
+        
+        flash(f"{shares} shares of {name} ({symbol}) bought for a total of {usd(total_cost)}")
+        return redirect("/")
+    # if request.method == "GET":
+    return render_template("buy.html")
 
 
 @app.route("/history")
@@ -116,7 +184,7 @@ def quote():
             if stock_data is None:
                 return apology("Symbol not found")
         except:
-            return apology("Symbol not found")
+            return apology("Symbol not found!")
         name = stock_data["name"]
         price = stock_data["price"]
         return render_template("quoted.html", name=name, price=price, symbol=stock_data["symbol"]) #embedding values from lookup
