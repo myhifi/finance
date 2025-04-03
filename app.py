@@ -1,7 +1,7 @@
 import os
 
 from cs50 import SQL
-from flask import Flask, flash, redirect, render_template, request, session
+from flask import Flask, flash, redirect, render_template, request, session, jsonify
 from flask_session import Session
 from werkzeug.security import check_password_hash, generate_password_hash
 
@@ -36,7 +36,35 @@ def after_request(response):
 @login_required
 def index():
     """Show portfolio of stocks"""
-    return apology("TODO")
+    # if request.method == "GET":
+    # Query database for user's transactions
+    user_transactions = db.execute(
+        "SELECT symbol, SUM(shares) AS total_shares FROM transactions WHERE user_id = ? GROUP BY symbol HAVING total_shares > 0",
+        session["user_id"],
+    )
+    # to check what user_transactions get:
+    # return jsonify(user_transactions)
+
+    user_cash_db = db.execute("SELECT cash from users WHERE id=?", session["user_id"])
+    user_cash = round(user_cash_db[0]["cash"], 2)
+    
+    stock_data_list = []  # Create a list to store stock data
+
+    # Loop through each transaction and get stock data
+    for transaction in user_transactions:
+        stock_data = lookup(transaction["symbol"])
+        if stock_data:  # Check if lookup() returned a valid result
+            stock_data["shares"] = transaction["total_shares"] # add the shares to the stock data dictionary.
+            stock_data_list.append(stock_data)
+        else:
+            return apology("Symbol not found", 400) # Handle lookup errors.
+    
+    # Calculate total value of stocks
+    total_value = round(sum(stock["shares"] * stock["price"] for stock in stock_data_list), 2)
+    grand_total = round(total_value + user_cash, 2)
+    
+    # Render the index.html template with the user's portfolio data
+    return render_template("index.html", stocks=stock_data_list, cash=user_cash, total_value=total_value, grand_total=grand_total)
 
 
 @app.route("/buy", methods=["GET", "POST"])
@@ -107,7 +135,7 @@ def buy():
         except:
             return apology("Database insertion Error!")
         
-        flash(f"{shares} shares of {name} ({symbol}) bought for a total of {usd(total_cost)}")
+        flash(f"Bought {shares} shares of {name} ({symbol}) for {usd(total_cost)}")
         return redirect("/")
     # if request.method == "GET":
     return render_template("buy.html")
