@@ -269,4 +269,60 @@ def register():
 @login_required
 def sell():
     """Sell shares of stock"""
-    return apology("TODO")
+    # Get the unique stock symbols and total shares the user owns
+    user_stocks = db.execute(
+        "SELECT symbol, SUM(shares) AS total_shares FROM transactions WHERE user_id = ? GROUP BY symbol HAVING total_shares > 0",
+        session["user_id"],
+    )
+
+    if request.method == "POST":
+        symbol = request.form.get("symbol")
+        shares = request.form.get("shares")
+    
+        # Find the correct total_shares from the user_stocks list
+        total_shares = None
+        for stock in user_stocks:
+            if stock["symbol"] == symbol:
+                total_shares = stock["total_shares"]
+                break
+
+        # Handles both not symbol and symbol not in user_stocks
+        if total_shares is None:
+            return apology("Symbol not found!")
+
+        try:
+            shares = int(shares)
+        except ValueError:
+            return apology("Invalid shares input!")
+
+        if shares <= 0 or total_shares < shares:
+            return apology(f"Allowed Shares between 1 - {total_shares}")
+        
+        price = lookup(symbol)
+        if price is None:
+            return apology("Could not look up price")
+        sale = shares * price["price"]
+
+        user_id = session["user_id"]
+        cash = db.execute("SELECT cash FROM users WHERE id=?", user_id)[0]["cash"]
+
+        updated_cash = cash + sale
+
+        # Update user cash in the database
+        db.execute("UPDATE users SET cash = ? WHERE id = ?", updated_cash, user_id)
+
+        # Update Transactions Table
+        db.execute(
+            "INSERT INTO transactions (user_id, symbol, shares, price, date) VALUES (?, ?, ?, ?, ?)",
+            user_id,
+            symbol,
+            -shares, # Make shares negative for selling
+            price["price"],
+            datetime.datetime.now(),
+        )
+
+        flash(f"{shares} Shares of {symbol} sold!")
+        return redirect("/")
+
+    # GET request handling
+    return render_template("sell.html", stocks=user_stocks)
