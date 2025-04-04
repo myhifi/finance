@@ -145,7 +145,11 @@ def buy():
 @login_required
 def history():
     """Show history of transactions"""
-    return apology("TODO")
+    # For each row, make clear whether a stock was bought or sold and include the stock’s symbol, the (purchase or sale) price, the number of shares bought or sold, and the date and time at which the transaction occurred.
+    transactions_db = db.execute(
+        "SELECT * FROM transactions WHERE user_id =?", session["user_id"]
+    )
+    return render_template("history.html", transactions=transactions_db)
 
 
 @app.route("/login", methods=["GET", "POST"])
@@ -321,7 +325,7 @@ def sell():
             datetime.datetime.now(),
         )
 
-        flash(f"{shares} Shares of {symbol} sold!")
+        flash(f"{shares} Shares of ({symbol}) sold for {price['price'] * shares} !")
         return redirect("/")
 
     # GET request handling
