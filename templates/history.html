@@ -10,6 +10,7 @@
     <table>
         <thead>
             <tr>
+                <th>Type</th>
                 <th>Symbol</th>
                 <th>Shares</th>
                 <th>Price</th>
@@ -20,6 +21,11 @@
         <tbody>
             {% for stock in transactions %}
                 <tr>
+                    <td>{% if stock["shares"] < 0 %}
+                        Sell
+                    {% else %}
+                        Buy
+                    {% endif %}</td>
                     <td>{{ stock["symbol"] }}</td>
                     <td>{{ stock["shares"] }}</td>
                     <td>{{ stock["price"] }}</td>
