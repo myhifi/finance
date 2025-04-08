@@ -31,6 +31,13 @@ def after_request(response):
     response.headers["Pragma"] = "no-cache"
     return response
 
+def get_user_data():
+    # Retrieves the username and cash for the current user.
+    user_data = db.execute("SELECT username, cash FROM users WHERE id=?", session["user_id"])
+    if user_data:
+        return user_data[0] #Returns the first (and only) dictionary
+    else:
+        return None #Returns None if user not found.
 
 @app.route("/")
 @login_required
@@ -45,8 +52,8 @@ def index():
     # to check what user_transactions get:
     # return jsonify(user_transactions)
 
-    user_cash_db = db.execute("SELECT cash from users WHERE id=?", session["user_id"])
-    user_cash = round(user_cash_db[0]["cash"], 2)
+    user_data = get_user_data()
+    user_cash = round(user_data["cash"], 2)
     
     stock_data_list = []  # Create a list to store stock data
 
@@ -64,13 +71,15 @@ def index():
     grand_total = round(total_value + user_cash, 2)
     
     # Render the index.html template with the user's portfolio data
-    return render_template("index.html", stocks=stock_data_list, cash=user_cash, total_value=total_value, grand_total=grand_total)
+    return render_template("index.html", stocks=stock_data_list, cash=user_cash, total_value=total_value, grand_total=grand_total, username=user_data["username"])
 
 
 @app.route("/buy", methods=["GET", "POST"])
 @login_required
 def buy():
     """Buy shares of stock"""
+    user_data = get_user_data()
+
     if request.method == "POST":
         symbol = request.form.get("symbol")
         shares = request.form.get("shares")
@@ -108,15 +117,15 @@ def buy():
         user_id = session["user_id"]
         total_cost = shares * price
         
-        user_cash_rows = db.execute(
-            "SELECT cash FROM users WHERE id=?", user_id)
+        # user_cash_rows = db.execute("SELECT cash FROM users WHERE id=?", user_id)
         #to check what user_cash_rows get:
         # return jsonify(user_cash_rows)
         # output list of dictionaries containing a single dictionary:
         # [{"cash":10000}]
         """if not user_cash_rows:
             return apology("User not found", 500)  # Internal server error if user not found"""
-        user_cash = user_cash_rows[0]["cash"]
+        
+        user_cash = user_data["cash"]
 
         #Render an apology, without completing a purchase, if the user cannot afford the number of shares at the current price.
         if total_cost > user_cash:
@@ -138,7 +147,7 @@ def buy():
         flash(f"Bought {shares} shares of {name} ({symbol}) for {usd(total_cost)}")
         return redirect("/")
     # if request.method == "GET":
-    return render_template("buy.html")
+    return render_template("buy.html", username=user_data["username"], cash=user_data["cash"])
 
 
 @app.route("/history")
@@ -149,7 +158,8 @@ def history():
     transactions_db = db.execute(
         "SELECT * FROM transactions WHERE user_id =?", session["user_id"]
     )
-    return render_template("history.html", transactions=transactions_db)
+    user_data = get_user_data()
+    return render_template("history.html", transactions=transactions_db, username=user_data["username"], cash=user_data["cash"])
 
 
 @app.route("/login", methods=["GET", "POST"])
@@ -206,6 +216,7 @@ def logout():
 @login_required
 def quote():
     """Get stock quote."""
+    user_data = get_user_data()
     if request.method == "POST":
         symbol = request.form.get("quote")
         if not symbol:
@@ -219,10 +230,10 @@ def quote():
             return apology("Symbol not found!")
         name = stock_data["name"]
         price = stock_data["price"]
-        return render_template("quoted.html", name=name, price=price, symbol=stock_data["symbol"]) #embedding values from lookup
+        return render_template("quoted.html", name=name, price=price, symbol=stock_data["symbol"], username=user_data["username"], cash=user_data["cash"]) #embedding values from lookup
     
     # if request.method == "GET":
-    return render_template("quote.html")
+    return render_template("quote.html", username=user_data["username"], cash=user_data["cash"])
 
 
 @app.route("/register", methods=["GET", "POST"])
@@ -330,3 +341,58 @@ def sell():
 
     # GET request handling
     return render_template("sell.html", stocks=user_stocks)
+
+@app.route("/change_password", methods=["GET", "POST"])
+@login_required
+def change_password():
+    """Change user password"""
+    if request.method == "POST":
+        # Data entered by the user.
+        password = request.form.get("password")
+        new_pass = request.form.get("new_pass")
+        confirm = request.form.get("confirmation")
+
+        #Check if all fields are filled.
+        if not password:
+            return apology("Please provide your old password.")
+        elif not new_pass:
+            return apology("Please provide your new password.")
+        elif not confirm:
+            return apology("Please confirm your new password.")
+
+        user_id= session["user_id"]
+        # Verify Old Password:
+        # Queries the database to retrieve the stored password hash for the current user.
+        stored_hash = db.execute("SELECT hash FROM users WHERE id=?", user_id)
+
+        """if not stored_hash:
+            return apology("User not found", 400) #handles if the user does not exist.
+        """
+        stored_hash = stored_hash[0]["hash"]
+
+        # Use check_password_hash() to verify that the entered old password matches the stored hash.
+        if not check_password_hash(stored_hash, password):
+            return apology("Incorrect old password.", 403) #403 is forbidden.
+        
+        # Check if the Old password and New Password are diffrent.
+        if check_password_hash(stored_hash, new_pass):
+            return apology("Old Password & New Password are the same!")
+        
+        # Check if the new password and confirmation match.
+        if new_pass!= confirm:
+            return apology("New password isn't as confirmed password")
+        
+        # use generate_password_hash() to hash the new password.
+        new_hash = generate_password_hash(new_pass)
+        
+        # Update the user's password hash in the database.
+        db.execute("UPDATE users SET hash =? WHERE id=?", new_hash, user_id)
+
+        # Display a flash message to inform the user that their password has been changed successfully.
+        flash("Password changed successfully!")
+        return redirect("/")
+
+
+    # if request.method == "GET":
+    user_data = get_user_data()
+    return render_template("changepassword.html", username=user_data["username"])
