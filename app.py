@@ -385,8 +385,11 @@ def change_password():
         # use generate_password_hash() to hash the new password.
         new_hash = generate_password_hash(new_pass)
         
-        # Update the user's password hash in the database.
-        db.execute("UPDATE users SET hash =? WHERE id=?", new_hash, user_id)
+        try:
+            # Update the user's password hash in the database.
+            db.execute("UPDATE users SET hash =? WHERE id=?", new_hash, user_id)
+        except:
+            return apology("Database Error!")
 
         # Display a flash message to inform the user that their password has been changed successfully.
         flash("Password changed successfully!")
@@ -396,3 +399,34 @@ def change_password():
     # if request.method == "GET":
     user_data = get_user_data()
     return render_template("changepassword.html", username=user_data["username"])
+
+@app.route("/add_cash", methods=["GET", "POST"])
+@login_required
+def add_cash():
+    user_data = get_user_data()
+    if request.method == "POST":
+        # Input Validation
+        cash_amount = request.form.get("add_cash")
+        if not cash_amount:
+            return apology("Provide amount of Cash if you want to Add some!")
+        
+        try:
+            cash_amount = float(cash_amount)
+            # Check cash amount is a positive number.
+            if cash_amount <=0:
+                return apology("Amout of Cash to add Must be Positive!")
+        except ValueError:
+            return apology("Cash ammount must be Numeric!")
+
+        try:
+            # Update Database
+            total_cash = cash_amount + user_data["cash"]
+            db.execute("UPDATE users SET cash = ? WHERE id=?", total_cash, session["user_id"])
+        except:
+            return apology("Database error", 500)
+
+        flash(f"{cash_amount} Added successfully!")
+        return redirect("/")
+    
+    # if request.method == "GET":
+    return render_template("add_cash.html", username=user_data["username"], cash=user_data["cash"])
