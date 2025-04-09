@@ -93,6 +93,9 @@ def buy():
         if not stock_data:
             return apology("Symbol not found", 400)
         
+        if symbol:  # Check if symbol is not None
+            symbol = symbol.upper()
+            
         # Ensure shares is a positive integer
         try:
             shares = int(shares)
