@@ -40,13 +40,8 @@
                         <td>${{ "%.2f"|format(stock.current_price) }}</td>
                         <td>${{ "%.2f"|format(stock.target_price) }}</td>
                         <td>{{ stock.direction }}</td>
-                        <td>
-                            {% if stock.condition_met %}
-                                ✅
-                            {% else %}
-                                -
-                            {% endif %}
-                        </td>
+                        <td>{{ stock.status }}</td>
+
                         <td>
                             <a href="/watchlist/edit/{{ stock.id }}" class="btn btn-sm btn-warning">Edit</a>
                             <form action="/watchlist/delete/{{ stock.id }}" method="post" style="display:inline;">

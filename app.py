@@ -462,11 +462,14 @@ def watchlist():
         except ValueError:
             return apology("Enter a valid number for price!")
 
+        symbol = symbol.upper()
         # Insert new watchlist entry into the database
         db.execute(
             "INSERT INTO watchlist (user_id, symbol, target_price, direction) VALUES (?, ?, ?, ?)",
             user_id, symbol, target_price, direction
         )
+        
+        flash(f"{symbol} Added to watchlist")
 
     # GET request (or after POST insert)
     try:
@@ -480,25 +483,52 @@ def watchlist():
     for entry in entries:
         # Get real-time data
         quote = lookup(entry["symbol"])
-        current_price = quote["price"]
-        target_price = entry["target_price"]
-        direction = entry["direction"]
+        if quote:
+            current_price = float(quote["price"])
+            target_price = float(entry["target_price"])
+            direction = entry["direction"].lower()
 
-        # Determine status
-        if (direction == "above" and current_price > target_price) or \
-           (direction == "below" and current_price < target_price):
-            status = "✓"
+            # Determine status
+            if (direction == "above" and current_price > target_price) or \
+            (direction == "below" and current_price < target_price):
+                status = "✅"
+            else:
+                status = "-"
+
+            # Add current price and status to entry
+            watchlist_with_status.append({
+                "id": entry["id"],  # Include this so HTML gets stock.id
+                "symbol": entry["symbol"],
+                "current_price": current_price,
+                "target_price": target_price,
+                "direction": direction,
+                "status": status
+            })
         else:
-            status = "-"
-
-        # Add current price and status to entry
-        watchlist_with_status.append({
-            "symbol": entry["symbol"],
-            "current_price": current_price,
-            "target_price": target_price,
-            "direction": direction,
-            "status": status
-        })
+            # optionally message (or you may skip silently)
+            print(f"Warning: No quote found for {entry['symbol']}")
 
     # Pass the structured list to the template
     return render_template("watchlist.html", watchlist=watchlist_with_status)
+
+@app.route("/watchlist/delete/<int:entry_id>", methods=["POST"])
+@login_required
+def delete_watchlist_entry(entry_id):
+    # Get the current user's ID from the session
+    user_id = session["user_id"]
+
+    # Check if the watchlist entry with the given ID exists and belongs to this user
+    entry = db.execute("SELECT * FROM watchlist WHERE id = ? AND user_id = ?", entry_id, user_id)
+
+    # If not found or does not belong to the user, return an apology or error
+    if not entry:
+        return apology("No entry to be deleted!")
+
+    # If valid, delete the entry from the watchlist table (confirm user_id)
+    db.execute("DELETE FROM watchlist WHERE id = ? AND user_id = ?", entry_id, user_id)
+
+    symbol = entry[0]["symbol"]  # Extract symbol for message
+    flash(f"{symbol} successfully deleted from watchlist!")
+
+    # Redirect the user back to the watchlist page
+    return redirect("/watchlist")
