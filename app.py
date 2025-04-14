@@ -433,3 +433,72 @@ def add_cash():
     
     # if request.method == "GET":
     return render_template("add_cash.html", username=user_data["username"], cash=user_data["cash"])
+
+@app.route("/watchlist", methods=["GET", "POST"])
+@login_required
+def watchlist(): 
+    user_id = session["user_id"]
+
+    if request.method == "POST":
+        # Get form inputs
+        symbol = request.form.get("symbol")
+        target_price_input = request.form.get("target_price")
+        direction = request.form.get("direction")
+
+        # Validate presence
+        if not symbol or not target_price_input:
+            return apology("Must enter both symbol & target price!")
+
+        # Validate stock symbol
+        stock = lookup(symbol)
+        if not stock:
+            return apology("Symbol not found!")
+
+        # Validate and convert target price
+        try:
+            target_price = float(target_price_input)
+            if target_price < 0:
+                return apology("Target price can't be negative!")
+        except ValueError:
+            return apology("Enter a valid number for price!")
+
+        # Insert new watchlist entry into the database
+        db.execute(
+            "INSERT INTO watchlist (user_id, symbol, target_price, direction) VALUES (?, ?, ?, ?)",
+            user_id, symbol, target_price, direction
+        )
+
+    # GET request (or after POST insert)
+    try:
+        entries = db.execute("SELECT * FROM watchlist WHERE user_id = ?", user_id)
+    except:
+        return apology("Database Error, try again!")
+
+    # Prepare list of entries with current price and condition status
+    watchlist_with_status = []
+
+    for entry in entries:
+        # Get real-time data
+        quote = lookup(entry["symbol"])
+        current_price = quote["price"]
+        target_price = entry["target_price"]
+        direction = entry["direction"]
+
+        # Determine status
+        if (direction == "above" and current_price > target_price) or \
+           (direction == "below" and current_price < target_price):
+            status = "✓"
+        else:
+            status = "-"
+
+        # Add current price and status to entry
+        watchlist_with_status.append({
+            "symbol": entry["symbol"],
+            "current_price": current_price,
+            "target_price": target_price,
+            "direction": direction,
+            "status": status
+        })
+
+    # Pass the structured list to the template
+    return render_template("watchlist.html", watchlist=watchlist_with_status)
