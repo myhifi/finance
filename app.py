@@ -438,6 +438,7 @@ def add_cash():
 @login_required
 def watchlist(): 
     user_id = session["user_id"]
+    edit_id = request.args.get("edit_id", type=int)
 
     if request.method == "POST":
         # Get form inputs
@@ -509,7 +510,8 @@ def watchlist():
             print(f"Warning: No quote found for {entry['symbol']}")
 
     # Pass the structured list to the template
-    return render_template("watchlist.html", watchlist=watchlist_with_status)
+    return render_template("watchlist.html", watchlist=watchlist_with_status, edit_id=edit_id)
+# That way, when you click "Edit", the route /watchlist/edit/3 can redirect to /watchlist?edit_id=3 to show the inline form.
 
 @app.route("/watchlist/delete/<int:entry_id>", methods=["POST"])
 @login_required
@@ -532,3 +534,56 @@ def delete_watchlist_entry(entry_id):
 
     # Redirect the user back to the watchlist page
     return redirect("/watchlist")
+
+@app.route("/watchlist/edit/<int:entry_id>", methods=["GET", "POST"]) 
+@login_required
+def edit_watchlist_entry(entry_id):
+    # Get current user's ID from session
+    user_id = session["user_id"]
+
+    # Fetch the watchlist entry from DB by ID and make sure it belongs to this user
+    entry = db.execute("SELECT * FROM watchlist WHERE id = ? AND user_id = ?", entry_id, user_id)
+
+    # If entry not found or does not belong to the user, return an apology
+    if not entry:
+        return apology("No entry to edit!")
+
+    # print(entry) # Outputs like:
+    # [{'id': 8, 'user_id': 4, 'symbol': 'IBM', 'target_price': 220.0, 'direction': 'above', 'timestamp': '2025-04-14 15:07:22'}]
+    # entry is returned as a list, so it’s best to extract the first dictionary
+    entry = entry[0]
+
+    # If method is POST:
+    if request.method == "POST":
+        # Get new values (e.g. target_price, direction) from form
+        new_target_price = request.form.get("target_price")
+        new_direction = request.form.get("direction")
+
+        # Validate input: Use existing values if inputs are left blank
+        if not new_target_price:
+            new_target_price = entry["target_price"]
+        if not new_direction:
+            new_direction = entry["direction"]
+
+        # Compare with existing values
+        # This avoids false negatives like "220.0" != 220.0.
+        new_target_price = float(new_target_price)
+        changed_target = new_target_price != entry["target_price"]
+        changed_direction = new_direction.lower() != entry["direction"].lower()
+
+        if changed_target or changed_direction:
+            # Update the entry in the database
+            db.execute("UPDATE watchlist SET target_price = ?, direction = ? WHERE id = ?", new_target_price, new_direction, entry["id"])
+
+            # flash a success message
+            flash(f"{entry['symbol']} Successfully edited!")
+        else:
+            flash("No changes made.")
+
+        # Redirect back to the watchlist
+        return redirect("/watchlist")
+
+    # If method is GET:
+    # Render an edit form template, pre-filled with current values of the entry
+    # return render_template("edit_watchlist.html", entry=entry)
+    return redirect(f"/watchlist?edit_id={entry_id}")

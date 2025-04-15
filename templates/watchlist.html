@@ -35,21 +35,44 @@
             </thead>
             <tbody>
                 {% for stock in watchlist %}
-                    <tr>
+                <tr>
+                    {% if edit_id == stock.id %}
+                        <!-- Editable row -->
+                        <form action="/watchlist/edit/{{ stock.id }}" method="post">
+                            <td>{{ stock.symbol }}</td>
+                            <td>${{ "%.2f"|format(stock.current_price) }}</td>
+                            <td>
+                                <input type="number" name="target_price" value="{{ stock.target_price }}" class="form-control" step="0.01" required>
+                            </td>
+                            <td>
+                                <select name="direction" class="form-control">
+                                    <option value="above" {% if stock.direction == 'above' %}selected{% endif %}>Above</option>
+                                    <option value="below" {% if stock.direction == 'below' %}selected{% endif %}>Below</option>
+                                </select>
+                            </td>
+                            <td>{{ stock.status }}</td>
+                            <td>
+                                <button type="submit" class="btn btn-sm btn-success">Save</button>
+                                <a href="/watchlist" class="btn btn-sm btn-secondary">Cancel</a>
+                            </td>
+                        </form>
+                    {% else %}
+                        <!-- Read-only row -->
                         <td>{{ stock.symbol }}</td>
                         <td>${{ "%.2f"|format(stock.current_price) }}</td>
                         <td>${{ "%.2f"|format(stock.target_price) }}</td>
                         <td>{{ stock.direction }}</td>
                         <td>{{ stock.status }}</td>
-
                         <td>
                             <a href="/watchlist/edit/{{ stock.id }}" class="btn btn-sm btn-warning">Edit</a>
                             <form action="/watchlist/delete/{{ stock.id }}" method="post" style="display:inline;">
                                 <button class="btn btn-sm btn-danger" type="submit">Delete</button>
                             </form>
                         </td>
-                    </tr>
+                    {% endif %}
+                </tr>
                 {% endfor %}
+
             </tbody>
         </table>
     {% else %}
