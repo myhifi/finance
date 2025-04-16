@@ -303,6 +303,10 @@ def sell():
             if stock["symbol"] == symbol:
                 total_shares = stock["total_shares"]
                 break
+        """Another way to find total shares:
+        user_shares = db.excute("SELECT shares FROM transactions WHERE user_id=? AND symbol=? GROUP BY symbol", session["user_id"], symbol)
+        total_shares = user_shares[0]["shares"]
+        """
 
         # Handles both not symbol and symbol not in user_stocks
         if total_shares is None:
@@ -585,5 +589,5 @@ def edit_watchlist_entry(entry_id):
 
     # If method is GET:
     # Render an edit form template, pre-filled with current values of the entry
-    # return render_template("edit_watchlist.html", entry=entry)
+    # return render_template("edit_watchlist.html", entry=entry) #if we have seperate edit html page
     return redirect(f"/watchlist?edit_id={entry_id}")
